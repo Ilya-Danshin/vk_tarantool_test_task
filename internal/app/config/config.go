@@ -10,6 +10,7 @@ import (
 type Config struct {
 	Bot struct {
 		TelegramApiToken string `env:"TELEGRAM_API_TOKEN"`
+		MessageTTL       int    `env:"MESSAGE_TIME_TO_LIVE"`
 	}
 	Database struct {
 		Host         string `env:"DB_HOST"`

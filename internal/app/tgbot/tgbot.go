@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
@@ -20,8 +21,9 @@ const delCommand = "/del"
 const delCommandFormat = "/del service"
 
 type TgBot struct {
-	bot *tgbotapi.BotAPI
-	db  *infrastructure.Database
+	bot        *tgbotapi.BotAPI
+	messageTTL time.Duration
+	db         *infrastructure.Database
 }
 
 func New(cfg *config.Config, db *infrastructure.Database) (*TgBot, error) {
@@ -36,6 +38,8 @@ func New(cfg *config.Config, db *infrastructure.Database) (*TgBot, error) {
 	// TODO: change debug mode
 	tgBot.bot.Debug = true
 	log.Printf("Authorized on account %s", tgBot.bot.Self.UserName)
+
+	tgBot.messageTTL = time.Duration(cfg.Bot.MessageTTL) * time.Minute
 
 	tgBot.db = db
 
@@ -69,7 +73,7 @@ func (b *TgBot) Run(ctx context.Context) error {
 	return nil
 }
 
-const setCommandSuccessMessage = "Credentials successfully added"
+const setCommandSuccessMessage = "Credentials successfully added\n\nMessage will delete in a %s"
 
 func (b *TgBot) setCommandHandle(ctx context.Context, message *tgbotapi.Message) error {
 	userID := message.From.ID
@@ -84,7 +88,8 @@ func (b *TgBot) setCommandHandle(ctx context.Context, message *tgbotapi.Message)
 		return err
 	}
 
-	err = b.replyToUser(message, setCommandSuccessMessage)
+	b.deleteMessage(message)
+	_, err = b.replyToUser(message, fmt.Sprintf(setCommandSuccessMessage, b.messageTTL))
 	if err != nil {
 		return err
 	}
@@ -93,7 +98,7 @@ func (b *TgBot) setCommandHandle(ctx context.Context, message *tgbotapi.Message)
 }
 
 const getCommandCantFindMessage = "Can't find credentials for service %s"
-const getCommandSuccessMessage = "service: %s\nlogin: %s\npassword: %s"
+const getCommandSuccessMessage = "service: %s\nlogin: %s\npassword: %s\n\nThis message will delete in a %s"
 
 func (b *TgBot) getCommandHandle(ctx context.Context, message *tgbotapi.Message) error {
 	userID := message.From.ID
@@ -109,10 +114,13 @@ func (b *TgBot) getCommandHandle(ctx context.Context, message *tgbotapi.Message)
 	}
 
 	if creds == nil {
-		err = b.replyToUser(message, fmt.Sprintf(getCommandCantFindMessage, service))
+		_, err = b.replyToUser(message, fmt.Sprintf(getCommandCantFindMessage, service))
 	} else {
 		for _, cred := range creds {
-			err = b.replyToUser(message, fmt.Sprintf(getCommandSuccessMessage, cred.Service, cred.Login, cred.Password))
+			var msg *tgbotapi.Message
+			msg, err = b.replyToUser(message, fmt.Sprintf(getCommandSuccessMessage, cred.Service, cred.Login,
+				cred.Password, b.messageTTL))
+			b.deleteMessage(msg)
 		}
 	}
 	if err != nil {
@@ -137,7 +145,7 @@ func (b *TgBot) delCommandHandle(ctx context.Context, message *tgbotapi.Message)
 		return err
 	}
 
-	err = b.replyToUser(message, delCommandSuccessMessage)
+	_, err = b.replyToUser(message, delCommandSuccessMessage)
 	if err != nil {
 		return err
 	}
@@ -145,14 +153,21 @@ func (b *TgBot) delCommandHandle(ctx context.Context, message *tgbotapi.Message)
 	return nil
 }
 
-func (b *TgBot) replyToUser(message *tgbotapi.Message, text string) error {
+func (b *TgBot) replyToUser(message *tgbotapi.Message, text string) (*tgbotapi.Message, error) {
 	msg := tgbotapi.NewMessage(message.Chat.ID, text)
 	msg.ReplyToMessageID = message.MessageID
 
-	_, err := b.bot.Send(msg)
+	botMessage, err := b.bot.Send(msg)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return &botMessage, nil
+}
+
+func (b *TgBot) deleteMessage(message *tgbotapi.Message) {
+	go func() {
+		time.Sleep(b.messageTTL)
+		b.bot.Send(tgbotapi.NewDeleteMessage(message.Chat.ID, message.MessageID))
+	}()
 }
