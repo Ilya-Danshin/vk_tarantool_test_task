@@ -1,0 +1,34 @@
+version: '3.3'
+
+services:
+  postgres:
+    image: postgres:latest
+    container_name: postgresdb
+    restart: on-failure
+    volumes:
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    environment:
+      - POSTGRES_PASSWORD=postgres
+    networks:
+      - tgbot_network
+    deploy:
+      restart_policy:
+        condition: on-failure
+        window: 15m
+
+  tgbot:
+    container_name: tgbot
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+    restart: on-failure
+    depends_on:
+      - postgres
+    environment:
+      ENV_FILE: /tgbot/config/docker.env
+    networks:
+      - tgbot_network
+
+networks:
+  tgbot_network:
+    driver: bridge
