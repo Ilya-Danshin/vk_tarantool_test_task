@@ -2,16 +2,19 @@ package app
 
 import (
 	"context"
+	"fmt"
+	"github.com/jackc/pgx/v4/pgxpool"
+	"vk_tarantool_test_task/internal/app/tgbot/repository/credentialsRepository"
+	"vk_tarantool_test_task/internal/app/tgbot/service/credentialsService"
 
 	"vk_tarantool_test_task/internal/app/config"
 	"vk_tarantool_test_task/internal/app/tgbot"
-	"vk_tarantool_test_task/internal/infrastructure"
 )
 
 type App struct {
 	cfg *config.Config
 	ctx context.Context
-	db  *infrastructure.Database
+	db  *credentialsService.Database
 	bot *tgbot.TgBot
 }
 
@@ -24,8 +27,17 @@ func New() (*App, error) {
 		return nil, err
 	}
 
-	app.ctx = context.Background()
-	app.db, err = infrastructure.New(app.cfg, app.ctx)
+	conn, err := app.connectToDB()
+	if err != nil {
+		return nil, err
+	}
+
+	repo, err := credentialsRepository.New(conn)
+	if err != nil {
+		return nil, err
+	}
+
+	app.db, err = credentialsService.New(repo)
 	if err != nil {
 		return nil, err
 	}
@@ -45,4 +57,17 @@ func (a *App) Run() error {
 	}
 
 	return nil
+}
+
+func (a *App) connectToDB() (*pgxpool.Pool, error) {
+	a.ctx = context.Background()
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%d sslmode=disable",
+		a.cfg.Database.Host, a.cfg.Database.User, a.cfg.Database.Password, a.cfg.Database.DatabaseName, a.cfg.Database.Port)
+
+	conn, err := pgxpool.Connect(a.ctx, dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	return conn, nil
 }
