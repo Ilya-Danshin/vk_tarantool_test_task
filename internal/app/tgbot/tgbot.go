@@ -6,11 +6,11 @@ import (
 	"log"
 	"strings"
 	"time"
+	"vk_tarantool_test_task/internal/app/tgbot/service"
 
 	"github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
 	"vk_tarantool_test_task/internal/app/config"
-	"vk_tarantool_test_task/internal/infrastructure"
 )
 
 const setCommand = "/set"
@@ -23,10 +23,10 @@ const delCommandFormat = "/del service"
 type TgBot struct {
 	bot        *tgbotapi.BotAPI
 	messageTTL time.Duration
-	db         *infrastructure.Database
+	db         service.CredentialsService
 }
 
-func New(cfg *config.Config, db *infrastructure.Database) (*TgBot, error) {
+func New(cfg *config.Config, db service.CredentialsService) (*TgBot, error) {
 	tgBot := &TgBot{}
 	var err error
 
@@ -83,7 +83,7 @@ func (b *TgBot) setCommandHandle(ctx context.Context, message *tgbotapi.Message)
 	}
 	service, login, password := parts[1], parts[2], parts[3]
 
-	err := b.db.InsertCredentialsHandler(ctx, userID, service, login, password)
+	err := b.db.InsertCredentials(ctx, userID, service, login, password)
 	if err != nil {
 		return err
 	}
@@ -108,7 +108,7 @@ func (b *TgBot) getCommandHandle(ctx context.Context, message *tgbotapi.Message)
 	}
 	service := parts[1]
 
-	creds, err := b.db.GetCredentialsHandler(ctx, userID, service)
+	creds, err := b.db.GetCredentials(ctx, userID, service)
 	if err != nil {
 		return err
 	}
@@ -138,9 +138,9 @@ func (b *TgBot) delCommandHandle(ctx context.Context, message *tgbotapi.Message)
 	if len(parts) != len(strings.Split(delCommandFormat, " ")) {
 		return fmt.Errorf("incorrect command format")
 	}
-	service := parts[1]
+	serv := parts[1]
 
-	err := b.db.DeleteCredentialsHandler(ctx, userID, service)
+	err := b.db.DeleteCredentials(ctx, userID, serv)
 	if err != nil {
 		return err
 	}
