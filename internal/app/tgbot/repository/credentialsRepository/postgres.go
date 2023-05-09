@@ -18,24 +18,12 @@ func New(conn *pgxpool.Pool) (*Postgres, error) {
 }
 
 const insertIntoCredentialsTable = `INSERT INTO credentials(user_id, service, login, password) 
-									VALUES ($1, $2, $3, $4);`
+									VALUES ($1, $2, $3, $4)
+									ON CONFLICT (user_id, service) DO UPDATE
+									SET login=excluded.login, password=excluded.password;`
 
 func (db *Postgres) Insert(ctx context.Context, userID int64, service, login, password string) error {
 	row, err := db.conn.Query(ctx, insertIntoCredentialsTable, userID, service, login, password)
-	if err != nil {
-		return err
-	}
-	defer row.Close()
-
-	return nil
-}
-
-const updateCredentialsTable = `UPDATE credentials
-								SET login=$1, password=$2
-								WHERE user_id=$3 AND service = $4`
-
-func (db *Postgres) Update(ctx context.Context, userID int64, service, login, password string) error {
-	row, err := db.conn.Query(ctx, updateCredentialsTable, login, password, userID, service)
 	if err != nil {
 		return err
 	}

@@ -21,24 +21,10 @@ func New(repo repository.CredentialsRepository) (*Database, error) {
 }
 
 func (db *Database) InsertCredentials(ctx context.Context, userID int64, service, login, password string) error {
-	// Before insert, we should check that there is already exist record for this user and service
-	cred, err := db.GetCredentials(ctx, userID, service)
-	if err != nil {
-		return err
-	}
 
-	if len(cred) == 0 {
-		// If there is no records for this service insert to database
-		err = db.repo.Insert(ctx, userID, service, login, password)
-		if err != nil {
-			return fmt.Errorf("database insert error: %w", err)
-		}
-	} else {
-		// If there is record for this service then update record
-		err = db.repo.Update(ctx, userID, service, login, password)
-		if err != nil {
-			return fmt.Errorf("database insert error: %w", err)
-		}
+	err := db.repo.Insert(ctx, userID, service, login, password)
+	if err != nil {
+		return fmt.Errorf("database insert error: %w", err)
 	}
 
 	return nil
